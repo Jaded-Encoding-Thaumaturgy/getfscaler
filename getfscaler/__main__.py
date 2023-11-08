@@ -5,17 +5,14 @@ import runpy
 import time
 from math import ceil
 from random import randint
-from typing import Any
+from typing import Any, cast
 
 from rich.logging import RichHandler
-from vskernels import (AdobeBicubic, Bessel, Bicubic, BicubicSharp, Bilinear,
-                       BlackHarris, BlackMan, BlackManMinLobe, BlackNuttall,
-                       Bohman, Box, BSpline, Catrom, Cosine, Descaler,
-                       FFmpegBicubic, FlatTop, Gaussian, Ginseng, Hamming,
-                       Hann, Hermite, Kaiser, Kernel, KernelT, Lanczos,
-                       MinSide, Mitchell, Parzen, Point, Quadratic, Robidoux,
-                       RobidouxSharp, RobidouxSoft, Sinc, Spline16, Spline36,
-                       Spline64, Welch, Wiener)
+from vskernels import (AdobeBicubic, Bicubic, BicubicSharp, Bilinear, BSpline,
+                       Catrom, Descaler, FFmpegBicubic, Hermite, Kernel,
+                       KernelT, Lanczos, Mitchell, Point, Robidoux,
+                       RobidouxSharp, RobidouxSoft, Spline16, Spline36,
+                       Spline64)
 from vsmasktools import Sobel, replace_squaremask
 from vsscale import fdescale_args
 from vssource import source
@@ -84,7 +81,7 @@ def get_error(
     kernel: KernelT | None = None,
 ) -> dict[str, float]:
     """Get the descale error."""
-    debug(kernel, get_error)
+    debug(str(kernel), get_error)
 
     if not issubclass(kernel if isinstance(kernel, type) else type(kernel), Descaler):
         if args.debug:
@@ -210,13 +207,6 @@ def get_kernels() -> list[KernelT]:
 
         # Point-based
         Point,
-
-        # Impulse-based
-        Hamming,
-        Quadratic,
-
-        # Misc kernels
-        BlackMan,
     ]
 
     if not args.extensive:
@@ -236,33 +226,13 @@ def get_kernels() -> list[KernelT]:
         RobidouxSharp,
 
         # Lanczos-based
+        Lanczos(taps=2),
         Lanczos(taps=5),
 
         # Spline-based
         Spline16,
         Spline36,
         Spline64,
-
-        # Impulse-based
-        Wiener,
-        Hann,
-        BlackHarris,
-        BlackNuttall,
-        FlatTop,
-        MinSide,
-        Ginseng,
-        Welch,
-        Cosine,
-        Bessel,
-        Parzen,
-        Kaiser,
-        Bohman,
-
-        # Misc kernels
-        Box,
-        BlackManMinLobe,
-        Sinc,
-        Gaussian
     ]
 
     return kernels
@@ -328,11 +298,13 @@ def get_vnode_from_script(script: SPath) -> vs.VideoNode:
 
     if not isinstance(out_vnode, vs.VideoNode):
         try:
-            out_vnode = out_vnode[0]
+            out_vnode = out_vnode[0]  # type:ignore[assignment]
         except IndexError:
-            raise CustomIndexError("Can not find an output node! Please set one in the script!", get_vnode_from_script)
+            raise CustomIndexError("Cannot find an output node! Please set one in the script!", get_vnode_from_script)
+        except Exception:
+            raise
 
-    return out_vnode
+    return cast(vs.VideoNode, out_vnode)
 
 
 def main() -> None:
@@ -345,7 +317,7 @@ def main() -> None:
         clip = source(p)
 
     if args.native_height == -1 and args.native_width == -1:
-        warn(f"You cannot set both \"--native-height\" and \"--native-width\" to \"-1\"!", main)
+        warn("You cannot set both \"--native-height\" and \"--native-width\" to \"-1\"!", main)
 
         return
 
