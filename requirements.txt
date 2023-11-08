@@ -1,0 +1,7 @@
+vapoursynth>=65
+vstools>=3.0.1
+vskernels>=3.0.2
+vsmasktools>=1.2.1
+vsscale>=2.0.1
+vssource>=0.9.7
+rich>=12.6.0
