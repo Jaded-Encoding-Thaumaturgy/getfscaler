@@ -1,6 +1,7 @@
 import argparse
 import logging
 import operator
+import runpy
 import time
 from math import ceil
 from random import randint
@@ -18,8 +19,9 @@ from vskernels import (AdobeBicubic, Bessel, Bicubic, BicubicSharp, Bilinear,
 from vsmasktools import Sobel, replace_squaremask
 from vsscale import fdescale_args
 from vssource import source
-from vstools import (FieldBased, FieldBasedT, FileWasNotFoundError, SPath,
-                     core, get_prop, get_w, plane, set_output, vs)
+from vstools import (CustomIndexError, FieldBased, FieldBasedT,
+                     FileWasNotFoundError, SPath, core, get_prop, get_w, plane,
+                     set_output, vs)
 
 # Logging stolen from vsmuxtools
 FORMAT = "%(message)s"
@@ -317,11 +319,29 @@ def print_results(clip: vs.VideoNode, errors: dict[str, float], framenum: int = 
          "and carefully verify them for yourself!")
 
 
+def get_vnode_from_script(script: SPath) -> vs.VideoNode:
+    """Get a videonode from a python script. This will always be output 0."""
+    runpy.run_path(script.to_str(), {}, '__vapoursynth__')
+
+    out_vnode = vs.get_output(0)
+
+    if not isinstance(out_vnode, vs.VideoNode):
+        try:
+            out_vnode = out_vnode[0]
+        except IndexError:
+            raise CustomIndexError("Can not find an output node! Please set one in the script!", get_vnode_from_script)
+
+    return out_vnode
+
+
 def main() -> None:
     if not (p := SPath(args.input_file)).exists():
         raise FileWasNotFoundError(f"Could not find the file, \"{p}\"!", main)
 
-    clip = source(p)
+    if p.suffix in (".py", ".vpy"):
+        clip = get_vnode_from_script(p)
+    else:
+        clip = source(p)
 
     if args.native_height == -1 and args.native_width == -1:
         warn(f"You cannot set both \"--native-height\" and \"--native-width\" to \"-1\"!", main)
@@ -346,7 +366,13 @@ def main() -> None:
         args.native_width = args.native_height * clip.width / clip.height
 
     framenum = args.frame or randint(0, clip.num_frames - 1)
-    frame = clip[framenum]
+
+    try:
+        frame = clip[framenum]
+    except IndexError:
+        raise CustomIndexError(
+            f"Custom frame number ({framenum}) exceeds number of frames in the clip ({clip.num_frames})!", main
+        )
 
     if args.frame is None:
         debug(f"No frame number given. Grabbing random frame ({framenum}/{clip.num_frames-1})...")
