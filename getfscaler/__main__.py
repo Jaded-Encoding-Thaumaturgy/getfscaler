@@ -65,15 +65,16 @@ def get_kernel_name(kernel: KernelT) -> tuple[str, str]:
     kernel = Kernel.ensure_obj(kernel)
 
     kernel_name = kernel.__class__.__name__
+    extended_name = kernel_name
 
     if isinstance(kernel, Bicubic):
-        kernel_name = f"Bicubic (b={kernel.b:.2f}, c={kernel.c:.2f})"
+        extended_name += f" (Bicubic b={kernel.b:.2f}, c={kernel.c:.2f})"
     elif isinstance(kernel, Lanczos):
-        kernel_name += f" (taps={kernel.taps})"
+        extended_name += f" (taps={kernel.taps})"
 
-    debug(f"Checking error for {kernel.__class__.__name__} ({kernel_name})...", get_kernel_name)
+    debug(f"Checking error for {kernel.__class__.__name__} ({extended_name})...", get_kernel_name)
 
-    return kernel_name, kernel.__class__.__name__
+    return kernel_name, extended_name
 
 
 def get_error(
