@@ -369,7 +369,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Find the best inverse scaler for a given frame")
+    parser = argparse.ArgumentParser(prog="getfscaler", description="Find the best inverse scaler for a given frame")
 
     parser.add_argument(
         dest="input_file",
