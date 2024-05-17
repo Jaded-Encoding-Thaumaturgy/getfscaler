@@ -1,4 +1,4 @@
-vapoursynth>=65
+VapourSynth>=68
 vstools>=3.0.1
 vskernels>=3.0.2
 vsmasktools>=1.2.1
