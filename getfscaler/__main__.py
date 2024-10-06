@@ -201,6 +201,7 @@ def get_kernels() -> list[KernelT]:
         Bilinear,
 
         # Lanczos-based
+        Lanczos(taps=2),
         Lanczos(taps=3),
         Lanczos(taps=4),
 
@@ -225,8 +226,14 @@ def get_kernels() -> list[KernelT]:
         RobidouxSharp,
 
         # Lanczos-based
-        Lanczos(taps=2),
         Lanczos(taps=5),
+        Lanczos(taps=6),
+        Lanczos(taps=7),
+        Lanczos(taps=8),
+        Lanczos(taps=9),
+        Lanczos(taps=10),
+        Lanczos(taps=11),
+        Lanczos(taps=12),
 
         # Spline-based
         Spline16,
