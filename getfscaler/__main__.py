@@ -291,9 +291,12 @@ def print_results(clip: vs.VideoNode, errors: dict[str, float], framenum: int = 
 
 def get_vnode_from_script(script: SPath) -> vs.VideoNode:
     """Get a videonode from a python script. This will always be output 0."""
-    runpy.run_path(script.to_str(), {}, '__vapoursynth__')
+    runpy.run_path(script.to_str(), {}, '__getfscaler__')
 
-    out_vnode = vs.get_output(0)
+    try:
+        out_vnode = vs.get_output(0)
+    except KeyError:
+        raise CustomKeyError("No output node found!", get_vnode_from_script)
 
     if not isinstance(out_vnode, vs.VideoNode):
         try:
