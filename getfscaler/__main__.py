@@ -8,16 +8,16 @@ from random import randint
 from typing import Any, cast
 
 from rich.logging import RichHandler
-from vskernels import (
-    AdobeBicubic, Bicubic, BicubicSharp, Bilinear, BSpline, Catrom, Descaler, FFmpegBicubic, Hermite, Kernel, KernelT,
-    Lanczos, Mitchell, Point, Robidoux, RobidouxSharp, RobidouxSoft, Spline16, Spline36, Spline64
-)
+from vskernels import (AdobeBicubic, Bicubic, BicubicSharp, Bilinear, BSpline,
+                       Catrom, Descaler, FFmpegBicubic, Hermite, Kernel,
+                       KernelT, Lanczos, Mitchell, Robidoux, RobidouxSharp,
+                       RobidouxSoft, Spline16, Spline36, Spline64)
 from vsmasktools import Sobel, replace_squaremask
 from vsscale import fdescale_args
 from vssource import source
-from vstools import (
-    CustomIndexError, FieldBased, FieldBasedT, FileWasNotFoundError, SPath, core, get_prop, get_w, plane, set_output, vs
-)
+from vstools import (CustomIndexError, CustomKeyError, FieldBased, FieldBasedT,
+                     FileWasNotFoundError, SPath, core, get_prop, get_w, plane,
+                     set_output, vs)
 
 # Logging stolen from vsmuxtools
 FORMAT = "%(message)s"
@@ -204,9 +204,6 @@ def get_kernels() -> list[KernelT]:
         Lanczos(taps=2),
         Lanczos(taps=3),
         Lanczos(taps=4),
-
-        # Point-based
-        Point,
     ]
 
     if not args.extensive:

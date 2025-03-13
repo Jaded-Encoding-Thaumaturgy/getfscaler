@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-import setuptools
 from pathlib import Path
+
+import setuptools
 
 package_name = 'getfscaler'
 
