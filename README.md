@@ -45,7 +45,7 @@ python getfscaler "input.png" -nh 720 -nw 1920
 This is a rewrite of the original getscaler <https://gist.github.com/cN3rd/51077b6abf45b684bf9a3c657d859b43>
 and features the following changes:
 
--   Use more robust IEW tooling
+-   Use more robust JET tooling
 -   Only use kernels used in professional software + Point by default
 -   Add additional post-filtering methods to reduce error caused by dithering and dirty edges
 -   Add fractional support (see: getfnative)
