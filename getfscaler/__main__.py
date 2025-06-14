@@ -8,16 +8,44 @@ from random import randint
 from typing import Any, cast
 
 from rich.logging import RichHandler
-from vskernels import (AdobeBicubic, Bicubic, BicubicSharp, Bilinear, BSpline,
-                       Catrom, Descaler, FFmpegBicubic, Hermite, Kernel,
-                       KernelT, Lanczos, Mitchell, Robidoux, RobidouxSharp,
-                       RobidouxSoft, Spline16, Spline36, Spline64)
+from vskernels import (
+    AdobeBicubic,
+    Bicubic,
+    BicubicSharp,
+    Bilinear,
+    BSpline,
+    Catrom,
+    Descaler,
+    FFmpegBicubic,
+    Hermite,
+    Kernel,
+    KernelLike,
+    Lanczos,
+    Mitchell,
+    Robidoux,
+    RobidouxSharp,
+    RobidouxSoft,
+    Spline16,
+    Spline36,
+    Spline64,
+)
+from vsscale import ScalingArgs
 from vsmasktools import Sobel, replace_squaremask
-from vsscale import fdescale_args
 from vssource import source
-from vstools import (CustomIndexError, CustomKeyError, FieldBased, FieldBasedT,
-                     FileWasNotFoundError, SPath, core, get_prop, get_w, plane,
-                     set_output, vs)
+from vstools import (
+    CustomIndexError,
+    CustomKeyError,
+    FieldBased,
+    FieldBasedT,
+    FileWasNotFoundError,
+    SPath,
+    core,
+    get_prop,
+    get_w,
+    plane,
+    set_output,
+    vs,
+)
 
 # Logging stolen from vsmuxtools
 FORMAT = "%(message)s"
@@ -57,7 +85,7 @@ def warn(msg: str, caller: Any = None, sleep: int = 0) -> None:
 caller_name = SPath(__file__).stem
 
 
-def get_kernel_name(kernel: KernelT) -> tuple[str, str]:
+def get_kernel_name(kernel: KernelLike) -> tuple[str, str]:
     kernel = Kernel.ensure_obj(kernel)
 
     kernel_name = kernel.__class__.__name__
@@ -77,7 +105,7 @@ def get_error(
     clip: vs.VideoNode,
     width: float = 1280.0, height: float = 720.0,
     line_mask: vs.VideoNode | None = None, crop: int = 8,
-    kernel: KernelT | None = None,
+    kernel: KernelLike | None = None,
 ) -> dict[str, float]:
     """Get the descale error."""
     debug(str(kernel), get_error)
@@ -95,13 +123,21 @@ def get_error(
     ceil_bh = ceil(height) & ~1
     ceil_bw = ceil(width) & ~1
 
-    de_args, up_args = fdescale_args(clip, height, ceil_bh, ceil_bw, up_rate=1.0, src_width=width)
+    desc_args = ScalingArgs.from_args(clip, height, width, ceil_bh, ceil_bw)
 
-    debug(f"Descaling using the following parameters: {de_args}", get_error)
-    debug(f"Upscaling using the following parameters: {up_args}", get_error)
+    debug(
+        f"Descaling using the following parameters: {
+            dict(width=desc_args.width, height=desc_args.height) | desc_args.kwargs()
+        }",
+        get_error
+    )
+    debug(f"Upscaling using the following parameters: {desc_args.kwargs()}", get_error)
 
     if not args.fields:
-        descaled = kernel.scale(kernel.descale(clip, **de_args), clip.width, clip.height, **up_args)
+        descaled = kernel.scale(
+            kernel.descale(clip, desc_args.width, desc_args.height, **desc_args.kwargs()),
+            clip.width, clip.height, **desc_args.kwargs()
+        )
 
         if args.out:
             set_output(descaled, name=f"{kernel_name} (rescaled)")
@@ -112,13 +148,13 @@ def get_error(
 
         return {kernel_out: err}
 
-    descaled_reg, shifts_reg = descale_fields(clip, de_args.get("height", 720), kernel, args.fields, False)
+    descaled_reg, shifts_reg = descale_fields(clip, desc_args.height, kernel, args.fields, False)
     descaled_reg = post_descale(clip, descaled_reg, line_mask, crop)
     err_reg = get_prop(descaled_reg.std.PlaneStats(clip), "PlaneStatsDiff", float)
 
     debug(f"Error for {kernel_class} [{kernel_name}, {shifts_reg[-1]}]: {err_reg:.13f}", get_error)
 
-    descaled_neg, shifts_neg = descale_fields(clip, de_args.get("height", 720), kernel, args.fields, True)
+    descaled_neg, shifts_neg = descale_fields(clip, desc_args.height, kernel, args.fields, True)
     descaled_neg = post_descale(clip, descaled_neg, line_mask, crop)
     err_neg = get_prop(descaled_neg.std.PlaneStats(clip), "PlaneStatsDiff", float)
 
@@ -185,8 +221,8 @@ def descale_fields(
     return upscaled, (target_shift, target_shift * neg)
 
 
-def get_kernels() -> list[KernelT]:
-    kernels: list[KernelT] = [
+def get_kernels() -> list[KernelLike]:
+    kernels: list[KernelLike] = [
         # Bicubic-based
         Hermite,  # Bicubic b=0.0, c=0.0
         Catrom,  # Bicubic b=0.0, c=0.5
