@@ -7,6 +7,7 @@ from math import ceil
 from random import randint
 from typing import Any, cast
 
+from jetpytools import CustomIndexError, CustomKeyError, FileWasNotFoundError, SPath
 from rich.logging import RichHandler
 from vskernels import (
     AdobeBicubic,
@@ -29,23 +30,10 @@ from vskernels import (
     Spline36,
     Spline64,
 )
-from vsscale import ScalingArgs
 from vsmasktools import Sobel, replace_squaremask
+from vsscale import ScalingArgs
 from vssource import source
-from vstools import (
-    CustomIndexError,
-    CustomKeyError,
-    FieldBased,
-    FieldBasedT,
-    FileWasNotFoundError,
-    SPath,
-    core,
-    get_prop,
-    get_w,
-    plane,
-    set_output,
-    vs,
-)
+from vstools import FieldBased, FieldBasedLike, core, get_prop, get_w, plane, set_output, vs
 
 # Logging stolen from vsmuxtools
 FORMAT = "%(message)s"
@@ -58,8 +46,11 @@ logger = logging.getLogger("getfscaler")
 
 def _format_msg(msg: str, caller: Any) -> str:
     if caller and not isinstance(caller, str):
-        caller = caller.__class__.__qualname__ if hasattr(caller, "__class__") and \
-            caller.__class__.__name__ not in ["function", "method"] else caller
+        caller = (
+            caller.__class__.__qualname__
+            if hasattr(caller, "__class__") and caller.__class__.__name__ not in ["function", "method"]
+            else caller
+        )
 
         caller = caller.__name__ if not isinstance(caller, str) else caller
 
@@ -67,7 +58,7 @@ def _format_msg(msg: str, caller: Any) -> str:
 
 
 def debug(msg: str, caller: Any = None) -> None:
-    if not logger.level == logging.DEBUG:
+    if logger.level != logging.DEBUG:
         return
 
     message = _format_msg(msg, caller)
@@ -103,8 +94,10 @@ def get_kernel_name(kernel: KernelLike) -> tuple[str, str]:
 
 def get_error(
     clip: vs.VideoNode,
-    width: float = 1280.0, height: float = 720.0,
-    line_mask: vs.VideoNode | None = None, crop: int = 8,
+    width: float = 1280.0,
+    height: float = 720.0,
+    line_mask: vs.VideoNode | None = None,
+    crop: int = 8,
     kernel: KernelLike | None = None,
 ) -> dict[str, float]:
     """Get the descale error."""
@@ -112,7 +105,7 @@ def get_error(
 
     if not issubclass(kernel if isinstance(kernel, type) else type(kernel), Descaler):
         if args.debug:
-            warn(f"Kernel \"{kernel}\" is not a subclass of Descaler! Skipping...", get_error)
+            warn(f'Kernel "{kernel}" is not a subclass of Descaler! Skipping...', get_error)
 
         return {}
 
@@ -127,16 +120,18 @@ def get_error(
 
     debug(
         f"Descaling using the following parameters: {
-            dict(width=desc_args.width, height=desc_args.height) | desc_args.kwargs()
+            {'width': desc_args.width, 'height': desc_args.height} | desc_args.kwargs()
         }",
-        get_error
+        get_error,
     )
     debug(f"Upscaling using the following parameters: {desc_args.kwargs()}", get_error)
 
     if not args.fields:
         descaled = kernel.scale(
             kernel.descale(clip, desc_args.width, desc_args.height, **desc_args.kwargs()),
-            clip.width, clip.height, **desc_args.kwargs()
+            clip.width,
+            clip.height,
+            **desc_args.kwargs(),
         )
 
         if args.out:
@@ -167,8 +162,7 @@ def get_error(
 
 
 def post_descale(
-    og_clip: vs.VideoNode, descaled_clip: vs.VideoNode,
-    line_mask: vs.VideoNode | None = None, crop: int = 8
+    og_clip: vs.VideoNode, descaled_clip: vs.VideoNode, line_mask: vs.VideoNode | None = None, crop: int = 8
 ) -> vs.VideoNode:
     # Reduce error by applying the descale to only the lineart and removing edges from the equation.
     if line_mask:
@@ -183,11 +177,7 @@ def post_descale(
 
 
 def descale_fields(
-    clip: vs.VideoNode,
-    height: int,
-    kernel: Kernel,
-    tff: FieldBasedT = FieldBased.TFF,
-    shift_negative: bool = False
+    clip: vs.VideoNode, height: int, kernel: Kernel, tff: FieldBasedLike = FieldBased.TFF, shift_negative: bool = False
 ) -> tuple[vs.VideoNode, tuple[float, float]]:
     """
     Descale the frame per-field.
@@ -201,19 +191,17 @@ def descale_fields(
     to_descale = FieldBased.ensure_presence(clip_y, tff)
     to_descale = to_descale.std.SeparateFields()
 
-    descaled_1 = kernel.descale(
-        to_descale[0::2], get_w(height, clip),
-        height // 2, (target_shift, 0.0)
-    )
-    descaled_2 = kernel.descale(
-        to_descale[1::2], get_w(height, clip),
-        height // 2, (target_shift * neg, 0.0)
-    )
+    descaled_1 = kernel.descale(to_descale[0::2], get_w(height, clip), height // 2, (target_shift, 0.0))
+    descaled_2 = kernel.descale(to_descale[1::2], get_w(height, clip), height // 2, (target_shift * neg, 0.0))
 
-    upscaled = FieldBased.PROGRESSIVE.apply(core.std.Interleave([
-        kernel.scale(descaled_1, clip.width, to_descale.height, (target_shift, 0)),
-        kernel.scale(descaled_2, clip.width, to_descale.height, (target_shift * neg, 0))
-    ]).std.DoubleWeave(tff=False))[::2]
+    upscaled = FieldBased.PROGRESSIVE.apply(
+        core.std.Interleave(
+            [
+                kernel.scale(descaled_1, clip.width, to_descale.height, (target_shift, 0)),
+                kernel.scale(descaled_2, clip.width, to_descale.height, (target_shift * neg, 0)),
+            ]
+        ).std.DoubleWeave(tff=False)
+    )[::2]
 
     if args.out:
         set_output(upscaled, name=f"{kernel.__class__.__name__} [{target_shift, target_shift * neg}] (rescaled)")
@@ -228,14 +216,11 @@ def get_kernels() -> list[KernelLike]:
         Catrom,  # Bicubic b=0.0, c=0.5
         Mitchell,  # Bicubic b=0.333, c=0.333
         BicubicSharp,  # Bicubic b=0.0, c=1.0
-
         # Bicubic-based but from specific applications
         FFmpegBicubic,  # Bicubic b=0.0, c=0.6. FFmpeg's swscale
         AdobeBicubic,  # Bicubic b=0.0, c=0.75. Adobe's "Bicubic" interpolation
-
         # Bilinear-based
         Bilinear,
-
         # Lanczos-based
         Lanczos(taps=2),
         Lanczos(taps=3),
@@ -257,7 +242,6 @@ def get_kernels() -> list[KernelLike]:
         Robidoux,
         RobidouxSoft,
         RobidouxSharp,
-
         # Lanczos-based
         Lanczos(taps=5),
         Lanczos(taps=6),
@@ -267,7 +251,6 @@ def get_kernels() -> list[KernelLike]:
         Lanczos(taps=10),
         Lanczos(taps=11),
         Lanczos(taps=12),
-
         # Spline-based
         Spline16,
         Spline36,
@@ -291,20 +274,22 @@ def print_results(clip: vs.VideoNode, errors: dict[str, float], framenum: int = 
     height = f"{args.native_height:.3f}" if not float(args.native_height).is_integer() else int(args.native_height)
     width = f"{args.native_width:.3f}" if not float(args.native_width).is_integer() else int(args.native_width)
 
-    header = f"\nResults for frame {framenum} (resolution: {width}/{height}, " \
-        f"AR: {args.native_width / args.native_height:.3f}, " \
+    header = (
+        f"\nResults for frame {framenum} (resolution: {width}/{height}, "
+        f"AR: {args.native_width / args.native_height:.3f}, "
         f"field-based: {FieldBased.from_video(clip).pretty_string}):"
+    )
 
     print(header)
     print("-" * max(80, len(header)))
-    print(f'{"Scaler":<44}\t{"Error%":>7}\t{"Abs. Error":>18}')
+    print(f"{'Scaler':<44}\t{'Error%':>7}\t{'Abs. Error':>18}")
 
     for name, abserr in errors_sorted:
         relerr = abserr / best[1] if best[1] != 0 else 0
         print(f"{name:<44}\t{relerr:>8.1%}\t{abserr:.13f}")
 
     print("-" * max(80, len(header)))
-    print(f"Smallest error achieved by \"{best[0]}\" ({best[1]:.10f})\n")
+    print(f'Smallest error achieved by "{best[0]}" ({best[1]:.10f})\n')
 
     if best[1] > 0.008:
         warn(
@@ -325,24 +310,25 @@ def print_results(clip: vs.VideoNode, errors: dict[str, float], framenum: int = 
             "Carefully compare your descaling results with Catrom or Lanczos!"
         )
 
-    warn("getscaler is not perfect! Please don't blindly trust these results "
-         "and carefully verify them for yourself!")
+    warn("getscaler is not perfect! Please don't blindly trust these results and carefully verify them for yourself!")
 
 
 def get_vnode_from_script(script: SPath) -> vs.VideoNode:
     """Get a videonode from a python script. This will always be output 0."""
-    runpy.run_path(script.to_str(), {}, '__getfscaler__')
+    runpy.run_path(script.to_str(), {}, "__getfscaler__")
 
     try:
         out_vnode = vs.get_output(0)
     except KeyError:
-        raise CustomKeyError("No output node found!", get_vnode_from_script)
+        raise CustomKeyError("No output node found!", get_vnode_from_script) from None
 
     if not isinstance(out_vnode, vs.VideoNode):
         try:
             out_vnode = out_vnode[0]  # type:ignore[assignment]
         except IndexError:
-            raise CustomIndexError("Cannot find an output node! Please set one in the script!", get_vnode_from_script)
+            raise CustomIndexError(
+                "Cannot find an output node! Please set one in the script!", get_vnode_from_script
+            ) from None
         except Exception:
             raise
 
@@ -351,15 +337,12 @@ def get_vnode_from_script(script: SPath) -> vs.VideoNode:
 
 def main() -> None:
     if not (p := SPath(args.input_file)).exists():
-        raise FileWasNotFoundError(f"Could not find the file, \"{p}\"!", main)
+        raise FileWasNotFoundError(f'Could not find the file, "{p}"!', main)
 
-    if p.suffix in (".py", ".vpy"):
-        clip = get_vnode_from_script(p)
-    else:
-        clip = source(p)
+    clip = get_vnode_from_script(p) if p.suffix in (".py", ".vpy") else source(p)
 
     if args.native_height == -1 and args.native_width == -1:
-        warn("You cannot set both \"--native-height\" and \"--native-width\" to \"-1\"!", main)
+        warn('You cannot set both "--native-height" and "--native-width" to "-1"!', main)
 
         return
 
@@ -399,7 +382,7 @@ def main() -> None:
         set_output(frame_y, name="original frame (luma)")
 
     kernels = get_kernels()
-    errors: dict[str, float] = dict()
+    errors: dict[str, float] = {}
 
     for kernel in kernels:
         err = get_error(frame_y, args.native_width, args.native_height, mask, args.crop, kernel)
@@ -424,8 +407,8 @@ if __name__ == "__main__":
         dest="native_height",
         type=float,
         default=720.0,
-        help="Approximated native height. Passing \"-1\" will use the input's height. "
-             "Default is 720.0. Accepts both int and float",
+        help='Approximated native height. Passing "-1" will use the input\'s height. '
+        "Default is 720.0. Accepts both int and float",
     )
     parser.add_argument(
         "--native_width",
@@ -433,8 +416,8 @@ if __name__ == "__main__":
         dest="native_width",
         type=float,
         default=None,
-        help="Approximated native width. Passing \"-1\" will use the input's width. "
-             "Default is None (auto-calculate from input and height)",
+        help='Approximated native width. Passing "-1" will use the input\'s width. '
+        "Default is None (auto-calculate from input and height)",
     )
     parser.add_argument(
         "--crop",
@@ -459,9 +442,9 @@ if __name__ == "__main__":
         type=int,
         default=0,
         help="How to treat the field properties of the frame. "
-             "0 = Progressive, 1 = Bottom-Field-First, 2 = Top-Field-First. "
-             "The shifts that were applied will be added to the Scaler in square brackets. "
-             "Defaults to 0 (Progressive)"
+        "0 = Progressive, 1 = Bottom-Field-First, 2 = Top-Field-First. "
+        "The shifts that were applied will be added to the Scaler in square brackets. "
+        "Defaults to 0 (Progressive)",
     )
     parser.add_argument(
         "--swap",
