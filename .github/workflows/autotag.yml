@@ -2,10 +2,7 @@ name: Check and create tag
 on:
   push:
     branches:
-      - master
-  pull_request:
-    branches:
-      - master
+      - main
 
 jobs:
   new_version:
