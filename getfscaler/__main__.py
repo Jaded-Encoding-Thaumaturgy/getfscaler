@@ -5,7 +5,7 @@ import runpy
 import time
 from math import ceil
 from random import randint
-from typing import Any, cast
+from typing import Any
 
 from jetpytools import CustomIndexError, CustomKeyError, FileWasNotFoundError, SPath
 from rich.logging import RichHandler
@@ -322,17 +322,10 @@ def get_vnode_from_script(script: SPath) -> vs.VideoNode:
     except KeyError:
         raise CustomKeyError("No output node found!", get_vnode_from_script) from None
 
-    if not isinstance(out_vnode, vs.VideoNode):
-        try:
-            out_vnode = out_vnode[0]  # type:ignore[assignment]
-        except IndexError:
-            raise CustomIndexError(
-                "Cannot find an output node! Please set one in the script!", get_vnode_from_script
-            ) from None
-        except Exception:
-            raise
+    if isinstance(out_vnode, vs.VideoOutputTuple):
+        return out_vnode.clip
 
-    return cast(vs.VideoNode, out_vnode)
+    raise CustomIndexError("Cannot find an output node! Please set one in the script!", get_vnode_from_script)
 
 
 def main() -> None:
