@@ -16,11 +16,9 @@ from vskernels import (
     Bilinear,
     BSpline,
     Catrom,
-    Descaler,
     FFmpegBicubic,
     Hermite,
     Kernel,
-    KernelLike,
     Lanczos,
     Mitchell,
     Robidoux,
@@ -76,9 +74,7 @@ def warn(msg: str, caller: Any = None, sleep: int = 0) -> None:
 caller_name = SPath(__file__).stem
 
 
-def get_kernel_name(kernel: KernelLike) -> tuple[str, str]:
-    kernel = Kernel.ensure_obj(kernel)
-
+def get_kernel_name(kernel: Kernel) -> tuple[str, str]:
     kernel_name = kernel.__class__.__name__
     extended_name = kernel_name
 
@@ -94,22 +90,15 @@ def get_kernel_name(kernel: KernelLike) -> tuple[str, str]:
 
 def get_error(
     clip: vs.VideoNode,
+    kernel: Kernel,
     width: float = 1280.0,
     height: float = 720.0,
     line_mask: vs.VideoNode | None = None,
     crop: int = 8,
-    kernel: KernelLike | None = None,
 ) -> dict[str, float]:
     """Get the descale error."""
     debug(str(kernel), get_error)
 
-    if not issubclass(kernel if isinstance(kernel, type) else type(kernel), Descaler):
-        if args.debug:
-            warn(f'Kernel "{kernel}" is not a subclass of Descaler! Skipping...', get_error)
-
-        return {}
-
-    kernel = Kernel.ensure_obj(kernel)
     kernel_name, kernel_class = get_kernel_name(kernel)
     kernel_out = kernel_name if args.swap else kernel_class
 
@@ -209,18 +198,18 @@ def descale_fields(
     return upscaled, (target_shift, target_shift * neg)
 
 
-def get_kernels() -> list[KernelLike]:
-    kernels: list[KernelLike] = [
+def get_kernels() -> list[Kernel]:
+    kernels: list[Kernel] = [
         # Bicubic-based
-        Hermite,  # Bicubic b=0.0, c=0.0
-        Catrom,  # Bicubic b=0.0, c=0.5
-        Mitchell,  # Bicubic b=0.333, c=0.333
-        BicubicSharp,  # Bicubic b=0.0, c=1.0
+        Hermite(),  # Bicubic b=0.0, c=0.0
+        Catrom(),  # Bicubic b=0.0, c=0.5
+        Mitchell(),  # Bicubic b=0.333, c=0.333
+        BicubicSharp(),  # Bicubic b=0.0, c=1.0
         # Bicubic-based but from specific applications
-        FFmpegBicubic,  # Bicubic b=0.0, c=0.6. FFmpeg's swscale
-        AdobeBicubic,  # Bicubic b=0.0, c=0.75. Adobe's "Bicubic" interpolation
+        FFmpegBicubic(),  # Bicubic b=0.0, c=0.6. FFmpeg's swscale
+        AdobeBicubic(),  # Bicubic b=0.0, c=0.75. Adobe's "Bicubic" interpolation
         # Bilinear-based
-        Bilinear,
+        Bilinear(),
         # Lanczos-based
         Lanczos(taps=2),
         Lanczos(taps=3),
@@ -238,10 +227,10 @@ def get_kernels() -> list[KernelLike]:
 
     kernels += [
         # Bicubic-based
-        BSpline,
-        Robidoux,
-        RobidouxSoft,
-        RobidouxSharp,
+        BSpline(),
+        Robidoux(),
+        RobidouxSoft(),
+        RobidouxSharp(),
         # Lanczos-based
         Lanczos(taps=5),
         Lanczos(taps=6),
@@ -252,9 +241,9 @@ def get_kernels() -> list[KernelLike]:
         Lanczos(taps=11),
         Lanczos(taps=12),
         # Spline-based
-        Spline16,
-        Spline36,
-        Spline64,
+        Spline16(),
+        Spline36(),
+        Spline64(),
     ]
 
     return kernels
@@ -378,7 +367,7 @@ def main() -> None:
     errors: dict[str, float] = {}
 
     for kernel in kernels:
-        err = get_error(frame_y, args.native_width, args.native_height, mask, args.crop, kernel)
+        err = get_error(frame_y, kernel, args.native_width, args.native_height, mask, args.crop)
 
         if err:
             errors |= err
