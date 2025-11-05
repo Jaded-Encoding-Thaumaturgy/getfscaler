@@ -1,4 +1,4 @@
-name: Lint Python code with Ruff
+name: Lint Python code with Ruff & mypy
 
 on:
   push:
@@ -10,30 +10,49 @@ on:
     paths:
       - "**.py"
 
+permissions:
+  contents: read
+
+env:
+  VAPOURSYNTH_VERSION: 69
+  PYTHON_VERSION: "3.14"
+
 jobs:
-  windows:
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        vs-versions:
-          - 68
-        python-version:
-          - "3.12"
+  lint:
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: qoomon/actions--context@v5
+        id: context
+      - name: Determine branch name
+        id: branch-names
+        run: echo "current_branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up VapourSynth ${{ env.VAPOURSYNTH_VERSION }}
+        uses: ./.github/actions/setup-vapoursynth
+        with:
+          vapoursynth-version: ${{ env.VAPOURSYNTH_VERSION }}
 
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          pip install vapoursynth-portable==${{ matrix.vs-versions }}
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
+          uv sync --locked
 
       - name: Running ruff
-        run: ruff check getfscaler
+        run: |
+          uv run ruff check .
+          uv run ruff format --check --diff
+
+      - name: Running mypy
+        run: uv run mypy .
