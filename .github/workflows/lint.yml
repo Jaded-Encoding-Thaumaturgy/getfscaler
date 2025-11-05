@@ -14,7 +14,6 @@ permissions:
   contents: read
 
 env:
-  VAPOURSYNTH_VERSION: 69
   PYTHON_VERSION: "3.14"
 
 jobs:
@@ -39,11 +38,6 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-
-      - name: Set up VapourSynth ${{ env.VAPOURSYNTH_VERSION }}
-        uses: ./.github/actions/setup-vapoursynth
-        with:
-          vapoursynth-version: ${{ env.VAPOURSYNTH_VERSION }}
 
       - name: Install dependencies
         run: |
