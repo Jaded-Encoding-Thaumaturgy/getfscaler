@@ -3,7 +3,7 @@ name: Lint Python code with Ruff & mypy
 on:
   push:
     branches:
-      - main
+      - ci
     paths:
       - "**.py"
   pull_request:
@@ -20,15 +20,13 @@ env:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    outputs:
+      job_html_url: ${{ steps.context.outputs.job_html_url }}
+      job_name: ${{ steps.context.outputs.job_name }}
 
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: qoomon/actions--context@v5
-        id: context
-      - name: Determine branch name
-        id: branch-names
-        run: echo "current_branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v6
@@ -41,18 +39,43 @@ jobs:
           enable-cache: true
 
       - name: Set up VapourSynth ${{ env.VAPOURSYNTH_VERSION }}
-        uses: ./.github/actions/setup-vapoursynth
+        uses: Varde-s-Forks/setup-vapoursynth@master
         with:
           vapoursynth-version: ${{ env.VAPOURSYNTH_VERSION }}
 
       - name: Install dependencies
-        run: |
-          uv sync --locked
+        run: uv sync --locked
 
-      - name: Running ruff
+      - name: Run Ruff
+        id: ruff
         run: |
-          uv run ruff check .
-          uv run ruff format --check --diff
+          uv run ruff check . & uv run ruff format --check --diff
 
-      - name: Running mypy
+      - name: Run mypy
+        if: steps.ruff.outcome == 'sucess' || steps.ruff.outcome == 'failure'
+        id: mypy
         run: uv run mypy .
+
+      - name: Get context
+        if: failure()
+        uses: qoomon/actions--context@v5
+        id: context
+
+  webhook:
+    runs-on: ubuntu-latest
+    needs: lint
+    if: ${{ failure() }}
+
+    steps:
+      - name: Get branch
+        id: branch
+        run: echo "current_branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+
+      - name: Send Discord webhook
+        uses: tsickert/discord-webhook@v7.0.0
+        with:
+          webhook-url: ${{ secrets.WEBHOOK_URL }}
+          embed-url: ${{ needs.lint.outputs.job_html_url }}
+          embed-title: "[${{ github.event.repository.name }}] ${{ needs.lint.outputs.job_name }} failed on ${{ steps.branch.outputs.current_branch }}"
+          username: "GitHub - ${{ github.repository }}"
+          avatar-url: https://github.githubassets.com/favicons/favicon.png

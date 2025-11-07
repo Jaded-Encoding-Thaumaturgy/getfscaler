@@ -39,7 +39,7 @@ logging.basicConfig(
     format=FORMAT, datefmt="[%X]", handlers=[RichHandler(markup=True, omit_repeated_times=False, show_path=False)]
 )
 
-logger = logging.getLogger("getfscaler")
+logger = logging.getLogger("getfscaler")  # type: ignore
 
 
 def _format_msg(msg: str, caller: Any) -> str:
@@ -88,7 +88,7 @@ def get_kernel_name(kernel: Kernel) -> tuple[str, str]:
     return kernel_name, extended_name
 
 
-def get_error(
+def get_error(  # noqa
     clip: vs.VideoNode,
     kernel: Kernel,
     width: float = 1280.0,
@@ -111,7 +111,7 @@ def get_error(
         f"Descaling using the following parameters: {
             {'width': desc_args.width, 'height': desc_args.height} | desc_args.kwargs()
         }",
-        get_error,
+        get_error
     )
     debug(f"Upscaling using the following parameters: {desc_args.kwargs()}", get_error)
 
